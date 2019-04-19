@@ -1,0 +1,33 @@
+{
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "stopOnEntry": false,
+      "name": "Debug executable 'journal'",
+      "cargo": {
+        "args": ["build", "--bin=journal", "--package=journal"],
+        "filter": {
+          "name": "journal",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'journal'",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=journal", "--package=journal"],
+        "filter": {
+          "name": "journal",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
