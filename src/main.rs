@@ -8,15 +8,16 @@ use memmap::{Mmap};
 mod journal;
 use journal::*;
 
-#[derive(Debug)]
+
+#[repr(C, packed)]
 struct Foo {
   a: i32,
-  b: i32,
+  b: i8,
 }
 
 impl fmt::Display for Foo {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "({:X}, {:X})", self.a, self.b)
+    unsafe { write!(f, "({:X}, {:X})", self.a, self.b) }
   }
 
 }
@@ -44,13 +45,12 @@ fn main() -> Result<(), std::io::Error> {
   let file = File::open("cargo.lock")?;
   let mmap = unsafe { Mmap::map(&file)? };
 
-  let bar = &mmap[8..];
   let bar2 = unsafe {
-    & *(bar as *const [u8] as *const Foo)
+    & *(&mmap[8..] as *const [u8] as *const Foo)
   };
 
-
   println!("file length  = {:?}", mmap.len());
+  println!("Size of Foo  = {}", std::mem::size_of::<Foo>());
   println!("Foo  = {}", bar2);
 
   Ok(())
