@@ -1,8 +1,17 @@
 [package]
 name = "journal"
 version = "0.1.0"
-authors = ["JS <pr480796@gmail.com>"]
+authors = ["Rob <polygonhell@gmail.com>"]
 edition = "2018"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+codegen-units=16
+lto=true
 
 [dependencies]
 fnv = "1.0.6"
+memmap = "0.7.0"
