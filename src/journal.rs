@@ -3,8 +3,6 @@ use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::iter::FromIterator;
 
-#[allow(dead_code)]
-
 pub trait JournalRep<K, V> {
   fn insert(&mut self, k: K, v: V) -> Option<V>;
   fn remove(&mut self, k: &K) -> Option<V>;
@@ -53,6 +51,8 @@ where
   pub fn new() -> Journal<K, V> {
     Journal(Vec::new())
   }
+
+  #[allow(dead_code)]
   pub fn from_iter<I: IntoIterator<Item = JournalEntry<K, V>>>(iter: I) -> Journal<K, V> {
     Journal(Vec::from_iter(iter))
   }
