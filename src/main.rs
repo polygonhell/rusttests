@@ -9,6 +9,7 @@ mod journal;
 use journal::*;
 
 mod bitindex;
+mod bit_array;
 // use bitindex::{PackedPage, PAGE_SIZE};
 
 
@@ -29,6 +30,7 @@ impl fmt::Display for Foo {
 
 
 fn main() -> Result<(), std::io::Error> {
+
   let mut journal : Journal<&str, &str> = Journal::new();
   journal.append(Journal::add("hello", "world"));
   journal.append(Journal::add("hello2", "world2"));
