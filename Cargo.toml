@@ -16,6 +16,7 @@ debug=false
 rpath = false
 
 [dependencies]
+fnv = "1.0"
 memmap = "0.7"
 
 [dev-dependencies]

@@ -7,6 +7,7 @@ use std::fs::File;
 use memmap::{Mmap};
 
 mod bit_array;
+mod dictionary;
 
 
 
