@@ -3,24 +3,31 @@
 
 use std::alloc::{GlobalAlloc, Layout, System};
 
-
-
 struct CacheAlignedMem {
   ptr : *mut u8,
+  size : usize,
 }
 
 impl CacheAlignedMem {
-  fn new(size: u32) -> CacheAlignedMem {
+  fn new(size: usize) -> CacheAlignedMem {
     CacheAlignedMem {
-      ptr : unsafe { System.alloc_zeroed(Layout::from_size_align(size as usize, 64).unwrap()) },
+      size: size,
+      ptr : unsafe { System.alloc_zeroed(Layout::from_size_align(size, 64).unwrap()) },
     }
+  }
+}
+
+impl Drop for CacheAlignedMem {
+  fn drop(&mut self) -> () {
+    println!("Dropped");
+    unsafe { System.dealloc(self.ptr, Layout::from_size_align(self.size, 64).unwrap()); }
   }
 }
 
 
 // Align it to a cache line
 pub struct BitArray {
-  bytes: Vec<u8>,
+  bytes: CacheAlignedMem,
   mask: u64,
   word_size: u32,
 }
@@ -30,7 +37,7 @@ impl BitArray {
     // 7 additional bytes to cope with the 64 bit read in get/put
     let num_bytes = (((size * word_size + 7) >> 3) + 7) as usize;
     BitArray {
-      bytes: vec![0; num_bytes],
+      bytes: CacheAlignedMem::new(num_bytes),
       word_size: word_size,
       mask: (1u64 << word_size) - 1,
     }
@@ -41,7 +48,7 @@ impl BitArray {
     let byte_offset = bit_offset >> 3;
     let shift = bit_offset & 7;
     // unaligned read from byte offset
-    let ptr = unsafe { self.bytes.as_ptr().offset(byte_offset as isize) as *const u64 };
+    let ptr = unsafe { self.bytes.ptr.offset(byte_offset as isize) as *const u64 };
     let dword: u64 = unsafe { *ptr };
     ((dword >> shift) & self.mask) as u32
   }
@@ -50,7 +57,7 @@ impl BitArray {
     let bit_offset = index * self.word_size;
     let byte_offset = bit_offset >> 3;
     let shift = bit_offset & 7;
-    let ptr = unsafe { self.bytes.as_ptr().offset(byte_offset as isize) as *mut u64 };
+    let ptr = unsafe { self.bytes.ptr.offset(byte_offset as isize) as *mut u64 };
     let dword: u64 = unsafe { *ptr };
     let updated = dword & !(self.mask << shift) | ((value as u64) << shift);
     unsafe { *ptr = updated }
