@@ -8,6 +8,10 @@ use memmap::{Mmap};
 mod journal;
 use journal::*;
 
+mod bitindex;
+// use bitindex::{PackedPage, PAGE_SIZE};
+
+
 
 #[repr(C, packed)]
 struct Foo {
