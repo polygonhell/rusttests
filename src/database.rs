@@ -36,7 +36,7 @@ use std::path::Path;
 
 use memmap::MmapMut;
 
-static HEADER: Header = Header {
+static INIT_HEADER: Header = Header {
   version: Version {
     major_version: 0,
     minor_version: 0,
@@ -67,7 +67,7 @@ impl Database {
       .open(path)
       .map_err(DbError::Io)?;
     file
-      .set_len((HEADER.pages as u64) << HEADER.page_size_shift)
+      .set_len((INIT_HEADER.pages as u64) << INIT_HEADER.page_size_shift)
       .map_err(DbError::Io)?;
     let mmap = unsafe { MmapMut::map_mut(&file) }.map_err(DbError::Io)?;
 
@@ -76,7 +76,7 @@ impl Database {
     };
 
     let hdr = db.header();
-    *hdr = HEADER;
+    *hdr = INIT_HEADER;
 
     // TODO: initalize the base tables and the free list
     Ok(db)
