@@ -26,7 +26,7 @@ impl<A : Copy + Hash + Eq> Dictionary<A> {
 
     match &self.index {
       None => { 
-        let map = FnvHashMap::default();
+        let map = FnvHashMap::default(); // TODO should construct this out of entries
         self.index = Some(map);
       }
       Some(_val) => ()
@@ -71,5 +71,6 @@ pub mod tests {
     assert!(d.add(&"This is a test") == 0);
     assert!(d.add(&"And another test") == 1);
     assert!(d.add(&"And a third test") == 2);
+    assert!(d.add(&"This is a test") == 0);
   }
 }

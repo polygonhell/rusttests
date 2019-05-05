@@ -15,9 +15,10 @@ debug-assertions=false
 debug=false
 rpath = false
 
+
 [dependencies]
 fnv = "1.0"
-memmap = "0.7"
+mmap-fixed = "0.1"
 
 [dev-dependencies]
 criterion = "0.2"

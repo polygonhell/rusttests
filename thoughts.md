@@ -21,6 +21,23 @@ Must map
 
 Fundamentally it's just a list of values, ID is the array index, but it's better if ID is invariate with the addition of new values, so either we scan for value, or we maintain an index of Value &rarr; ID
 
+### Dictionary index
+Simplest implementation would be to keep a sorted list of indices, but insertion of new values is expensive amd would requuire locking the entire index.
+For a 1E6 unique entries that's ~3MB's of index.
+This might not matter if the general case is that inserts do not add new dictionary entries.
+Btree might be better, Another option is a sparse Array with room for insertion.
+
+Another option is to use a sparse index to reduce the range that's scanned.
+Idea here is to use a bit mask to reduce the ranges that need to be scanned likely based on low bitrange Hashes of the value. 128 bits reduces scans to upto 1% of the total volume.
+However for randomly distributed data it's likely it's no help.
+
+Simplest solution is to not have an index and always scan
+
+
+### Shared Dictionaries
+Ideally FK/PK pairs ould share the Dictionary.
+
+
 **For variably sized values**<br>
 List Ptr &rarr; value<br>
 Ordered list of indices into above<br>
@@ -30,7 +47,7 @@ Values
 List of Values<br>
 Ordered list of indices into above<br>
 
-Note updates to the ordered list are likely to be monolithic, an colum with 1M unique values would require updating ~20E6 bit or ~2.5 MB's of index. on average it's half that but still unpalatible.
+Note updates to the ordered list are likely to be monolithic, an column with 1M unique values would require updating ~20E6 bit or ~2.5 MB's of index. on average it's half that but still unpalatible.
 
 One alternative is to use a page based index that generally doesn't cause ripples through the entire structure on insert, possibly a B* tree or PMA, or some cache aware/oblivious structure with pointers beween pages, but this will havve a memory overhead and an increased cost per lookup.
 
