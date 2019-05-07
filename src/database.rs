@@ -1,3 +1,16 @@
+use std::mem;
+
+const FREE_LIST_VERSION: u8 = 0;
+const INITIAL_DB_SIZE: u32 = 256;
+const PAGE_SIZE_SHIFT: u8 = 12;
+const PAGE_SIZE: usize = 1 << PAGE_SIZE_SHIFT;
+const VERSION: Version = Version {
+  major_version: 0,
+  minor_version: 0,
+  patch_level: 0,
+  dummy: 0,
+};
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Version {
@@ -21,6 +34,34 @@ struct Header {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
+union FreeListBody {
+  leaf: FreeListLeaf,
+  ptrs: FreeListPtrs,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FreeListLeaf {
+  d: [u8; (PAGE_SIZE - 4)],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FreeListPtrs {
+  d: [u32; ((PAGE_SIZE - 4) / 4)],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FreeList {
+  depth: u8,   // 0 is just a bit map, 1 is ptr's to a bit map, 2 is ptr->ptr to bitmap etc
+  version: u8, // Just In case
+  padding: u16,
+  data: FreeListBody,
+}
+
+#[repr(C)]
 pub struct Database {
   mmap: MmapMut,
 }
@@ -36,17 +77,12 @@ use std::path::Path;
 
 use memmap::MmapMut;
 
-static INIT_HEADER: Header = Header {
-  version: Version {
-    major_version: 0,
-    minor_version: 0,
-    patch_level: 0,
-    dummy: 0,
-  },
-  page_size_shift: 12,
+const INIT_HEADER: Header = Header {
+  version: VERSION,
+  page_size_shift: PAGE_SIZE_SHIFT,
   free_list: 1,
   table_index: 2,
-  pages: 256,
+  pages: INITIAL_DB_SIZE,
 };
 
 impl Database {
@@ -71,20 +107,134 @@ impl Database {
       .map_err(DbError::Io)?;
     let mmap = unsafe { MmapMut::map_mut(&file) }.map_err(DbError::Io)?;
 
-    let mut db = Database {
-      mmap : mmap,
-    };
+    let db = Database { mmap: mmap };
 
     let hdr = db.header();
     *hdr = INIT_HEADER;
 
-    // TODO: initalize the base tables and the free list
+    // Create the Free list with the first 3 bits set 1 for the header, 1 for the FList itself and 1 for the table table
+    let flist = db.free_list();
+    flist.init();
+    flist.set_arr(&[0, 1, 2]);
+
+    // TODO: initalize the base table
     Ok(db)
   }
 
-  fn header(&mut self) -> &mut Header {
+  fn header(&self) -> &mut Header {
+    unsafe { &mut *(self.mmap.as_ptr() as *mut Header) }
+  }
+
+  fn free_list(&self) -> &mut FreeList {
     unsafe {
-      &mut (*(self.mmap.as_mut_ptr() as *mut Header))
+      let header = self.header();
+      &mut *(self
+        .mmap
+        .as_ptr()
+        .offset((header.free_list as isize) << header.page_size_shift)
+        as *mut FreeList)
     }
+  }
+}
+
+impl FreeList {
+  fn init(&mut self) -> () {
+    assert_eq!(PAGE_SIZE, mem::size_of::<FreeList>());
+    self.version = 0;
+    self.depth = 0;
+    self.padding = 0;
+    unsafe { self.data.leaf.d = [0; (PAGE_SIZE - 4)] };
+  }
+
+  fn set(&mut self, index: u32) -> &mut FreeList {
+    let depth = self.depth;
+    match depth {
+      0 => unsafe { self.data.leaf.set(index) },
+      _x => println!("Not Implemented : set"),
+    }
+    self
+  }
+
+  fn set_arr(&mut self, index: &[u32]) -> &mut FreeList {
+    let depth = self.depth;
+    match depth {
+      0 => unsafe { self.data.leaf.set_arr(index) },
+      _x => println!("Not Implemented : set_arr"),
+    }
+    self
+  }
+}
+
+impl FreeListLeaf {
+  fn set(&mut self, index: u32) {
+    let byte = (index as usize) >> 3;
+    let bit = index & 7;
+    self.d[byte] = self.d[byte] | (1 << bit);
+  }
+
+  fn set_arr(&mut self, is: &[u32]) {
+    is.iter().for_each(|x| {
+      self.set(*x);
+    })
+  }
+
+  fn get(&self, index: u32) -> bool {
+    let byte = (index as usize) >> 3;
+    let bit = index & 7;
+    0 != (self.d[byte] & (1 << bit))
+  }
+
+  // Find a sequence of consequtive free pages of size
+  // TODO: some obvious optimizations for large requests
+  fn find_free(&self, size: u32) -> u32 {
+    let byte_size = mem::size_of::<FreeListLeaf>();
+    for i in 0..byte_size {
+      match self.d[i] {
+        0xff => (),
+        b => {
+          // Compute the length of the run at least upto Size
+          // get the index of the first unser bit
+          let mut index = (i as u32) * 8 + (!b).trailing_zeros();
+          let mut run = 1;
+          // Just scan the rest of the Bit Array
+          for r in (index + 1)..(byte_size as u32 * 8) {
+            if run >= size {
+              return index;
+            };
+            if !self.get(r) {
+              if run == 0 {
+                run = 1;
+                index = r;
+              } else {
+                run = run + 1;
+              }
+            } else {
+              run = 0
+            }
+          }
+        }
+      }
+    }
+    // Zero is never valid
+    0
+  }
+}
+
+#[cfg(test)]
+pub mod tests {
+  use super::*;
+
+  #[test]
+  pub fn find() {
+    let mut p = FreeListLeaf {
+      d: [0; (PAGE_SIZE - 4)],
+    };
+    p.set_arr(&[0, 1, 4, 8, 256]);
+    assert!(p.find_free(1) == 2);
+    assert!(p.find_free(2) == 2);
+    assert!(p.find_free(3) == 5);
+    assert!(p.find_free(4) == 9);
+    assert!(p.find_free(256) == 257);
+    assert!(p.find_free(4096 * 8) == 0);
   }
 }

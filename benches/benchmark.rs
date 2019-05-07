@@ -7,6 +7,9 @@ use criterion::black_box;
 #[path = "../src/bit_array.rs"] 
 mod bit_array;
 
+#[path = "../src/database.rs"] 
+mod database;
+
 
 fn bench_bit_array(c: &mut Criterion) {
     let mut pp = bit_array::BitArray::new(40, 11);
@@ -16,7 +19,7 @@ fn bench_bit_array(c: &mut Criterion) {
     c.bench_function("get BA", move |b| b.iter(|| pp.get(black_box(20u32))));
 }
 
-criterion_group!(benches, bench_bit_array);
 
+criterion_group!(benches, bench_bit_array);
 
 criterion_main!(benches);

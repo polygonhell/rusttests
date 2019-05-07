@@ -76,8 +76,12 @@ fn main() -> Result<(), AppError> {
 
   // let map1 = unsafe { map::map(& file); }
   // write_file()?;
+  println!("3 = {}", 3u8.leading_zeros());
+  println!("5 = {}", 5u8.leading_zeros());
+  println!("9 = {}", 9u8.leading_zeros());
 
   let _db = Database::new("system.db").map_err(AppError::DbError)?;
+
 
 
 
