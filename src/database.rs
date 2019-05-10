@@ -140,7 +140,7 @@ impl Database {
 impl FreeList {
   fn init(&mut self) -> () {
     assert_eq!(PAGE_SIZE, mem::size_of::<FreeList>());
-    self.version = 0;
+    self.version = FREE_LIST_VERSION;
     self.depth = 0;
     self.padding = 0;
     unsafe { self.data.leaf.d = [0; (PAGE_SIZE - 4)] };
