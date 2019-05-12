@@ -10,8 +10,10 @@ use std::fs::File;
 use std::fs::OpenOptions;
 
 mod bit_array;
+mod dictionary_old;
 mod dictionary;
 mod database;
+mod paged_vector;
 
 
 fn write_file() -> Result<(), std::io::Error> {

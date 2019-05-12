@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use std::mem;
 
 const FREE_LIST_VERSION: u8 = 0;
@@ -84,6 +86,54 @@ const INIT_HEADER: Header = Header {
   table_index: 2,
   pages: INITIAL_DB_SIZE,
 };
+
+use crate::paged_vector::{Page};
+
+pub trait PageProvider {
+  fn alloc(&mut self, count: usize) -> Vec<u32>;
+  fn mut_page(&mut self, i: u32) -> (&mut PageProvider, &mut Page);
+  fn page(&self, i: u32) -> &Page;
+  fn index_of(&self, page: &Page) -> u32;
+}
+
+
+pub struct MemoryPageProvider {
+  pages: Vec<Vec<u8>>
+}
+
+impl MemoryPageProvider {
+  pub fn new() -> MemoryPageProvider {
+    MemoryPageProvider {pages: Vec::new()}
+  }
+}
+
+impl PageProvider for MemoryPageProvider {
+  fn alloc(&mut self, _count: usize) -> Vec<u32> {
+    self.pages.push(Vec::with_capacity(PAGE_SIZE));
+    vec![(self.pages.len() - 1) as u32]
+  }
+
+  fn page(&self, i: u32) -> &Page {
+    let page = self.pages[i as usize].as_ptr();
+    unsafe { & *(page as *const u8 as *const Page) }
+  }
+
+  fn mut_page(&mut self, i: u32) -> (&mut PageProvider, &mut Page) {
+    let page = self.pages[i as usize].as_mut_ptr();
+    (self, unsafe { &mut *(page as *const u8 as *mut Page) })
+  }
+
+  fn index_of(&self, page: &Page) -> u32 {
+    let ptr = page as *const Page as *const u8;
+    for i in 0..self.pages.len() {
+      if (&(self.pages[i])[0] as *const u8) == ptr {
+        return i as u32
+      }
+    }
+    panic!("Not Found")
+  }
+
+}
 
 impl Database {
   pub fn new(file_name: &str) -> Result<Database, DbError> {
