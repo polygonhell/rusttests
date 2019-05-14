@@ -421,7 +421,7 @@ pub mod tests {
   }
 
   #[test]
-  // #[ignore] // Takes way to long to run, but necessary
+  #[ignore] // Takes way to long to run, but necessary
   pub fn add_even_more() {
     let mut pp = MemoryPageProvider::new();
     let root = pp.alloc(1)[0];
@@ -434,7 +434,7 @@ pub mod tests {
     };
 
     // Should result in an extra level
-    for i in 0..2000000000 {
+    for i in 0..4000000000u64 {
       p.append(&(i as u32));
     }
 
@@ -444,14 +444,14 @@ pub mod tests {
       page.header
     );
 
-    let mut count: u32 = 0;
+    let mut count: u64 = 0;
     p.iter_from(0).for_each(|x| {
-      assert!(x == count);
+      assert!(x == count as u32);
       count += 1;
     });
-    assert!(count == 2000000000);
+    assert!(count == 4000000000u64);
 
-    for i in 0..2000000000 {
+    for i in 0..4000000000usize {
       assert!(*p.get(i) == i as u32);
     }
   }
