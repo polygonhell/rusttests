@@ -45,17 +45,34 @@ pub struct Page {
   data: [u32; 1],
 }
 
+pub struct PageRef<'a, T> {
+  header: &'a PageHeader,
+  data: &'a [T]
+}
+
+pub struct MutPageRef<'a, T> {
+  header: &'a mut PageHeader,
+  data: &'a mut [T]
+}
+
 impl Page {
   const fn capacity<T>() -> usize {
     (PAGE_SIZE - std::mem::size_of::<PageHeader>()) / std::mem::size_of::<T>()
   }
 
-  fn data<T>(&self) -> &[T] {
-    unsafe {
-      std::slice::from_raw_parts(
-        &self.data[0] as *const u32 as *const T,
-        self.header.entries as usize,
-      )
+  fn mut_pref<T>(&mut self) -> MutPageRef<T> {
+    let entries = self.header.entries as usize;
+    MutPageRef::<T> {
+      header: &mut self.header,
+      data: unsafe { std::slice::from_raw_parts_mut(&mut self.data[0] as *mut u32 as *mut T, entries) },
+    }
+  }
+
+  fn pref<T>(&self) -> PageRef<T> {
+    let entries = self.header.entries as usize;
+    PageRef::<T> {
+      header: &self.header,
+      data: unsafe { std::slice::from_raw_parts(&self.data[0] as *const u32 as *const T, entries) },
     }
   }
 
@@ -63,13 +80,6 @@ impl Page {
     self.header = EMPTY_HEADER;
   }
 }
-
-macro_rules! mut_data {
-  ($page : ident) => (
-    unsafe {&mut *($page.data::<u32>() as *const [u32] as *mut [u32])}
-  )
-}
-
 
 fn rotate_node(page_indices: &[u32], pp: &mut PageProvider, depth: u8) -> u32 {
   if page_indices.len() <= Page::capacity::<u32>() {
@@ -79,8 +89,8 @@ fn rotate_node(page_indices: &[u32], pp: &mut PageProvider, depth: u8) -> u32 {
     new_page.header = EMPTY_HEADER;
     new_page.header.depth = depth;
     new_page.header.entries = page_indices.len() as u16;
-    let data = mut_data!(new_page);
-    data.copy_from_slice(page_indices);
+    let new_page_ref = new_page.mut_pref::<u32>();
+    new_page_ref.data.copy_from_slice(page_indices);
     new_index
   } else {
     panic!("Not Implemented: insert requires multiple rotations")
@@ -123,13 +133,14 @@ fn append_i<T: Debug>(
     leaf_fn(page, v, pp)
   } else {
     // Proceed down to next level
-    let page_data = mut_data!(page);
-    let next_page_index = page_data[page.header.entries as usize - 1];
+    let page_ref = page.mut_pref::<u32>();
+    let page_data = page_ref.data;
+    let next_page_index = page_data[page_ref.header.entries as usize - 1];
     let (pp, next_page) = pp.mut_page(next_page_index);
-    let mut new_pages = append_i(page.header.depth, next_page, v, leaf_fn, pp);
+    let mut new_pages = append_i(page_ref.header.depth, next_page, v, leaf_fn, pp);
 
     if !new_pages.is_empty() {
-      if next_page.header.depth + 1 != page.header.depth {
+      if next_page.header.depth + 1 != page_ref.header.depth {
         new_pages.insert(0, next_page_index);
         let new_index = rotate_node(&new_pages, pp, next_page.header.depth + 1);
         page_data[page_data.len() as usize - 1] = new_index;
@@ -139,8 +150,8 @@ fn append_i<T: Debug>(
         let to_copy = std::cmp::min(free_slots, new_pages.len());
         let entries = page.header.entries;
         page.header.entries += to_copy as u16;
-        let page_data = mut_data!(page);
-        page_data[entries as usize..entries as usize + to_copy]
+        let page_ref = page.mut_pref::<u32>();
+        page_ref.data[entries as usize..entries as usize + to_copy]
           .copy_from_slice(&new_pages[..to_copy]);
         let rem = &new_pages[to_copy..];
         rem.to_vec()
@@ -184,8 +195,7 @@ fn page_ref<T>(page_index: u32, index: usize, pp: &PageProvider) -> (u32, &Page,
     let leaf_capacity = Page::capacity::<T>();
     let index_capacity = Page::capacity::<u32>();
     let page_contains = index_capacity.pow(page.header.depth as u32 - 1) * leaf_capacity;
-    let page_data = page.data();
-
+    let page_data = page.pref::<u32>().data;
     let next_page = page_data[index / page_contains];
     let next_index = index % page_contains;
     page_ref::<T>(next_page, next_index, pp)
@@ -204,7 +214,7 @@ fn get<'a, T: Debug>(
 
 fn get_u32<'a>(page: &'a Page, index: usize) -> &'a u32 {
   assert!(index < page.header.entries as usize);
-  let page_data = page.data();
+  let page_data = page.pref::<u32>().data;
   &page_data[index]
 }
 
@@ -251,7 +261,7 @@ struct PagedVectorIterator<'a, T> {
 impl<'a> Iterator for PagedVectorIterator<'a, u32> {
   type Item = u32;
   fn next(&mut self) -> Option<u32> {
-    let page_data = self.page.data();
+    let page_data = self.page.pref::<u32>().data;
 
     if self.offset < page_data.len() {
       let val = page_data[self.offset];
@@ -261,7 +271,7 @@ impl<'a> Iterator for PagedVectorIterator<'a, u32> {
       if self.page.header.next != 0 {
         self.page = self.vector.db.page(self.page.header.next);
         self.offset = 0;
-        let page_data = self.page.data();
+        let page_data = self.page.pref::<u32>().data;
         let val = page_data[self.offset];
         self.offset += 1;
         Some(val)
@@ -411,7 +421,7 @@ pub mod tests {
   }
 
   #[test]
-  #[ignore] // Takes way to long to run, but necessary
+  // #[ignore] // Takes way to long to run, but necessary
   pub fn add_even_more() {
     let mut pp = MemoryPageProvider::new();
     let root = pp.alloc(1)[0];
