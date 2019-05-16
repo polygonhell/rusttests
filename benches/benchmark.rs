@@ -4,6 +4,9 @@ extern crate criterion;
 use criterion::Criterion;
 use criterion::black_box;
 
+#[path = "../src/paged_vector.rs"]
+mod paged_vector;
+
 #[path = "../src/bit_array.rs"] 
 mod bit_array;
 
