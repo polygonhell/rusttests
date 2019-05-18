@@ -68,6 +68,7 @@ fn write_file() -> Result<(), std::io::Error> {
 
 
 use database::Database;
+use journal::Journal;
 
 #[derive(Debug)]
 enum AppError {
