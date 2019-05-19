@@ -14,6 +14,7 @@ mod dictionary_old;
 mod dictionary;
 mod database;
 mod paged_vector;
+mod journal;
 
 
 fn write_file() -> Result<(), std::io::Error> {
@@ -73,6 +74,7 @@ use journal::Journal;
 #[derive(Debug)]
 enum AppError {
   DbError(database::DbError),
+  JournalError(journal::JournalError),
 }
 
 fn main() -> Result<(), AppError> {
@@ -83,8 +85,23 @@ fn main() -> Result<(), AppError> {
   println!("5 = {}", 5u8.leading_zeros());
   println!("9 = {}", 9u8.leading_zeros());
 
-  let _db = Database::new("system.db").map_err(AppError::DbError)?;
+  // let _db = Database::new("system.db").map_err(AppError::DbError)?;
 
+  let mut j = journal::DiskJournal::new("foo.jrnl").map_err(AppError::JournalError)?;
+  j.add(&journal::Entry::Write{ page: 10, offset: 0, bytes: vec![1, 2, 3] }).map_err(AppError::JournalError)?;
+  j.add(&journal::Entry::Msg{v:"Hello Word".to_string()}).map_err(AppError::JournalError)?;
+  j.add(&journal::Entry::Msg{v:"Hello Again".to_string()}).map_err(AppError::JournalError)?;
+
+  let mut j = j.flush().map_err(AppError::JournalError)?;
+  
+  j.add(&journal::Entry::Msg{v:"After Sync".to_string()}).map_err(AppError::JournalError)?;
+
+  let j = j.flush().map_err(AppError::JournalError)?;
+
+  
+  let f = j.read().map_err(AppError::JournalError)?;
+
+  println!("{:?}",f);
 
 
 
