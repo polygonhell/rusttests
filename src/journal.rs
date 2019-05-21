@@ -12,14 +12,11 @@ pub struct DiskJournal<'a> {
   writer: BufWriter<File>,
 }
 
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum Entry {
-  Write {
-    page: u32,
-    offset: u16,
-    bytes: Vec<u8>,
-  },
+  AppendU32s { id: u64, u32s: Vec<u32> },
   Msg{v: String},
 }
 
@@ -29,41 +26,6 @@ pub enum JournalError {
   SerError(ser::Error),
   Error(&'static str),
 }
-
-
-impl Entry {
-    fn write_slice<T>(page: u32, offset: u16, vs: &[T]) -> Entry {
-    let ptr = vs.as_ptr() as *const u8;
-    let length = vs.len() * std::mem::size_of::<T>();
-    let new_slice = unsafe { std::slice::from_raw_parts(ptr, length) };
-    // Copy from the slice
-    let bytes = new_slice.to_vec();
-
-    Entry::Write {
-      page: page,
-      offset: offset,
-      bytes: bytes,
-    }
-  }
-
-  fn write<T>(page: u32, offset: u16, vs: &mut Vec<T>) -> Entry {
-    // Hand off the vector in here
-    let ptr = vs.as_mut_ptr() as *mut u8;
-    let length = vs.len() * std::mem::size_of::<T>();
-    let capacity = vs.capacity() * std::mem::size_of::<T>();
-    let bytes = unsafe { Vec::from_raw_parts(ptr, length, capacity) };
-    std::mem::forget(vs);
-    // Memory now owned by returned struct
-
-    Entry::Write {
-      page: page,
-      offset: offset,
-      bytes: bytes,
-    }
-  }
-
-}
-
 
 pub trait Journal {
   fn add(&mut self, entry: &Entry) -> Result<(), JournalError>;
@@ -100,7 +62,7 @@ impl<'a> DiskJournal<'a> {
       Ok(x) => Ok(x),
       Err(_) => Err(JournalError::Error("Failed to get file from writer"))
     }?;
-    
+
     file.sync_all().map_err(JournalError::IoError)?;
     Ok(DiskJournal {
       fname: self.fname,

@@ -69,7 +69,9 @@ fn write_file() -> Result<(), std::io::Error> {
 
 
 use database::Database;
-use journal::Journal;
+use journal::{Journal, Entry, DiskJournal};
+
+use AppError::JournalError;
 
 #[derive(Debug)]
 enum AppError {
@@ -87,16 +89,16 @@ fn main() -> Result<(), AppError> {
 
   // let _db = Database::new("system.db").map_err(AppError::DbError)?;
 
-  let mut j = journal::DiskJournal::new("foo.jrnl").map_err(AppError::JournalError)?;
-  j.add(&journal::Entry::Write{ page: 10, offset: 0, bytes: vec![1, 2, 3] }).map_err(AppError::JournalError)?;
-  j.add(&journal::Entry::Msg{v:"Hello Word".to_string()}).map_err(AppError::JournalError)?;
-  j.add(&journal::Entry::Msg{v:"Hello Again".to_string()}).map_err(AppError::JournalError)?;
+  let mut j = DiskJournal::new("foo.jrnl").map_err(JournalError)?;
+  j.add(&Entry::AppendU32s{ id: 12, u32s: vec![1, 2, 3] }).map_err(JournalError)?;
+  j.add(&Entry::Msg{v:"Hello Word".to_string()}).map_err(JournalError)?;
+  j.add(&Entry::Msg{v:"Hello Again".to_string()}).map_err(JournalError)?;
 
-  let mut j = j.flush().map_err(AppError::JournalError)?;
+  let mut j = j.flush().map_err(JournalError)?;
   
-  j.add(&journal::Entry::Msg{v:"After Sync".to_string()}).map_err(AppError::JournalError)?;
+  j.add(&Entry::Msg{v:"After Sync".to_string()}).map_err(JournalError)?;
 
-  let j = j.flush().map_err(AppError::JournalError)?;
+  let j = j.flush().map_err(JournalError)?;
 
   
   let f = j.read().map_err(AppError::JournalError)?;
