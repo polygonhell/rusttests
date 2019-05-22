@@ -169,6 +169,32 @@ Tending towards about 1/2 of document size.
 
 
 
+## Transactionality requirements
+Given a WAL and a snapshot must be able to re-apply the WAL to the snapshot and it should result in the same database.
+Changes to the database can be interupted at any point and any modified page may not be committed at the point of interruption.
+A Snapshot should retain the minimum state to restore the data base to a point that the WAL can be applied.
+### Append
+Modifies the lst most page in the table and potentially all parent nodes of that node.
+Modifications are limited to appending to existing data and modification of the headers.
+Note may also include modifying of the last byte in a data-page in the case of add bitlength values.
+Can allocate additional pages.
+May result in Dictionary updates
+### Update
+modifies just the values in the existing entry.
+Can reult in an additional append if current value cannot be updated in place.
+May result in Dictionary updates.
+### Delete
+Has to be via tombstoning, effectively an update
+
+Snapshot must then capture current allocation map, and the last page chained to parent of every Paged Array, or at least their headers.
+TODO determine what's necessary for Index changes.
+
+Could snapshot on write, i.e. add reversal data at the start of a commit transaction.
+
+
+
+
+
 
 
 
