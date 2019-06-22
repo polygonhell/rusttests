@@ -282,43 +282,46 @@ fn get<'a, T: Debug>(
 
 // Walking the index is common regardless of type
 trait PagedVectorFns<'a, T> {
-  fn append(&mut self, v: &T);
+  fn push(&mut self, v: &T);
+  fn append(&mut self, v: &[T]);
   fn get(&self, i: usize) -> &T;
   fn iter_from(&'a self, i: usize) -> PagedVectorIterator<T>;
   // fn get_slice(&self, i: usize, len: usize) -> &[T];
 }
 
-struct PagedVector<'a> {
+struct PagedVector<'a, T> {
   db: &'a mut PageProvider,
   entry_page: u32,
+  _dummy: std::marker::PhantomData<T>
 }
 
-impl<'a> PagedVectorFns<'a, u32> for PagedVector<'a> {
-  fn append(&mut self, v: &u32) {
-    // self.entry_page = append(self.entry_page, v, &append_u32, self.db);
+impl<'a, T: Debug+Copy> PagedVectorFns<'a, T> for PagedVector<'a, T> {
+  fn push(&mut self, v: &T) {
     self.entry_page = append_slice(self.entry_page, &[*v], self.db);
   }
 
-  fn get(&self, i: usize) -> &u32 {
+  fn append(&mut self, v: &[T]) {
+    self.entry_page = append_slice(self.entry_page, v, self.db);
+  }
+
+  fn get(&self, i: usize) -> &T {
     get(self.entry_page, i, self.db)
   }
 
-  fn iter_from(&'a self, i: usize) -> PagedVectorIterator<u32> {
-    let (_page_index, page, index) = page_ref::<u32>(self.entry_page, i, self.db);
+  fn iter_from(&'a self, i: usize) -> PagedVectorIterator<T> {
+    let (_page_index, page, index) = page_ref::<T>(self.entry_page, i, self.db);
     PagedVectorIterator {
       vector: self,
       page: page,
       offset: index,
-      _dummy: std::marker::PhantomData,
     }
   }
 }
 
 struct PagedVectorIterator<'a, T> {
-  vector: &'a PagedVector<'a>,
+  vector: &'a PagedVector<'a, T>,
   page: &'a Page,
   offset: usize,
-  _dummy: std::marker::PhantomData<T>,
 }
 
 impl<'a, T : Copy> Iterator for PagedVectorIterator<'a, T> {
@@ -358,14 +361,15 @@ pub mod tests {
     let (pp, page) = pp.mut_page(root);
     page.header = EMPTY_HEADER;
 
-    let mut p = PagedVector {
+    let mut p = PagedVector::<u32> {
       db: pp,
       entry_page: root,
+      _dummy : std::marker::PhantomData,
     };
 
-    p.append(&1);
-    p.append(&2);
-    p.append(&3);
+    p.push(&1);
+    p.push(&2);
+    p.push(&3);
 
     assert!(page.header.entries == 3);
     unsafe {
@@ -395,13 +399,14 @@ pub mod tests {
     let (pp, page) = pp.mut_page(root);
     page.header = EMPTY_HEADER;
 
-    let mut p = PagedVector {
+    let mut p = PagedVector::<u32> {
       db: pp,
       entry_page: root,
+      _dummy : std::marker::PhantomData,
     };
 
     for i in 0..1024 {
-      p.append(&(i as u32));
+      p.push(&(i as u32));
     }
 
     let (pp, page) = p.db.mut_page(p.entry_page);
@@ -429,13 +434,15 @@ pub mod tests {
     let (pp, page) = pp.mut_page(root);
     page.header = EMPTY_HEADER;
 
-    let mut p = PagedVector {
+    let mut p = PagedVector::<u32> {
       db: pp,
       entry_page: root,
+      _dummy : std::marker::PhantomData,
     };
 
+
     for i in 0..4000000 {
-      p.append(&(i as u32));
+      p.push(&(i as u32));
     }
 
     let (pp, page) = p.db.mut_page(p.entry_page);
@@ -478,14 +485,16 @@ pub mod tests {
     let (pp, page) = pp.mut_page(root);
     page.header = EMPTY_HEADER;
 
-    let mut p = PagedVector {
+    let mut p = PagedVector::<u32> {
       db: pp,
       entry_page: root,
+      _dummy : std::marker::PhantomData,
     };
+
 
     // Should result in an extra level
     for i in 0..4000000000u64 {
-      p.append(&(i as u32));
+      p.push(&(i as u32));
     }
 
     let page = p.db.page(p.entry_page);
