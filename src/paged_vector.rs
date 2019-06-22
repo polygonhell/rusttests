@@ -321,10 +321,10 @@ struct PagedVectorIterator<'a, T> {
   _dummy: std::marker::PhantomData<T>,
 }
 
-impl<'a> Iterator for PagedVectorIterator<'a, u32> {
-  type Item = u32;
-  fn next(&mut self) -> Option<u32> {
-    let page_data = self.page.pref::<u32>().data;
+impl<'a, T : Copy> Iterator for PagedVectorIterator<'a, T> {
+  type Item = T;
+  fn next(&mut self) -> Option<T> {
+    let page_data = self.page.pref::<T>().data;
 
     if self.offset < page_data.len() {
       let val = page_data[self.offset];
@@ -334,7 +334,7 @@ impl<'a> Iterator for PagedVectorIterator<'a, u32> {
       if self.page.header.next != 0 {
         self.page = self.vector.db.page(self.page.header.next);
         self.offset = 0;
-        let page_data = self.page.pref::<u32>().data;
+        let page_data = self.page.pref::<T>().data;
         let val = page_data[self.offset];
         self.offset += 1;
         Some(val)
