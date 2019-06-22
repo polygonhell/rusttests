@@ -477,6 +477,73 @@ pub mod tests {
     assert!(count == 4000000);
   }
 
+
+ #[test]
+  // #[ignore] // Takes way to long to run, but necessary
+  pub fn add_agg() {
+    let mut pp = MemoryPageProvider::new();
+    let root = pp.alloc(1)[0];
+    let (pp, page) = pp.mut_page(root);
+    page.header = EMPTY_HEADER;
+
+    let mut p = PagedVector::<u32> {
+      db: pp,
+      entry_page: root,
+      _dummy : std::marker::PhantomData,
+    };
+
+    let repslice = [11, 22, 33];
+
+    for i in 0..4000000 {
+      p.append(&repslice);
+    }
+
+    let (pp, page) = p.db.mut_page(p.entry_page);
+    println!("Final Page header = {:?}", page.header);
+
+    let mut count = 0;
+    let slice_len = repslice.len();
+    p.iter_from(0).for_each(|x| {
+      assert!(x == repslice[count % slice_len]);
+      count += 1;
+    });
+
+    assert!(count == 4000000 * slice_len);
+  }
+
+ #[test]
+  // #[ignore] // Takes way to long to run, but necessary
+  pub fn add_long_agg() {
+    let mut pp = MemoryPageProvider::new();
+    let root = pp.alloc(1)[0];
+    let (pp, page) = pp.mut_page(root);
+    page.header = EMPTY_HEADER;
+
+    let mut p = PagedVector::<u32> {
+      db: pp,
+      entry_page: root,
+      _dummy : std::marker::PhantomData,
+    };
+
+    let repslice : Vec<u32> = (1..2000000).collect();
+
+    for i in 0..100 {
+      p.append(&repslice);
+    }
+
+    let (pp, page) = p.db.mut_page(p.entry_page);
+    println!("Final Page header = {:?}", page.header);
+
+    let mut count = 0;
+    let slice_len = repslice.len();
+    p.iter_from(0).for_each(|x| {
+      assert!(x == repslice[count % slice_len]);
+      count += 1;
+    });
+
+    assert!(count == 100 * slice_len);
+  }
+
   #[test]
   #[ignore] // Takes way to long to run, but necessary
   pub fn add_even_more() {
