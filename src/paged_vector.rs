@@ -286,7 +286,7 @@ trait PagedVectorFns<'a, T> {
   fn append(&mut self, v: &[T]);
   fn get(&self, i: usize) -> &T;
   fn iter_from(&'a self, i: usize) -> PagedVectorIterator<T>;
-  // fn get_slice(&self, i: usize, len: usize) -> &[T];
+  fn iter(&'a self) -> PagedVectorIterator<T>;
 }
 
 struct PagedVector<'a, T> {
@@ -315,6 +315,19 @@ impl<'a, T: Debug+Copy> PagedVectorFns<'a, T> for PagedVector<'a, T> {
       page: page,
       offset: index,
     }
+  }
+
+  fn iter(&'a self) -> PagedVectorIterator<T> {
+    self.iter_from(0)
+  }
+}
+
+impl<'a, T:'a+Copy+Debug> IntoIterator for &'a PagedVector<'a, T> {
+  type Item = T;
+  type IntoIter = PagedVectorIterator<'a, Self::Item>;
+
+  fn into_iter(self) -> Self::IntoIter {
+    self.iter()
   }
 }
 
