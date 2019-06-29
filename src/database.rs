@@ -75,7 +75,7 @@ pub enum DbError {
   Err(String),
 }
 
-use std::fs::{File, OpenOptions};
+use std::fs::{OpenOptions};
 use std::path::Path;
 
 use memmap::MmapMut;

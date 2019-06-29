@@ -11,7 +11,7 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
-use crate::database::{MemoryPageProvider, PageProvider};
+use crate::database::{PageProvider};
 use std::fmt::Debug;
 
 const PAGE_SIZE_SHIFT: u8 = 12;
@@ -94,45 +94,19 @@ fn last_page(page_index: u32, pp: &PageProvider) -> u32 {
   }
 }
 
-fn rotate_slice<'a, T: Debug + Copy>(
+fn rotate_slice(
   page_index: u32,
-  page: &mut Page,
-  v: &'a [T],
   pp: &mut PageProvider,
   depth: u8,
-) -> (u32, &'a [T]) {
-  let max_pages = Page::capacity::<u32>() - 1;
-  let page_capacity = Page::capacity::<T>();
-  let new_pages = std::cmp::min(max_pages, (v.len() + page_capacity - 1)/ page_capacity);
-  let to_take = std::cmp::min(new_pages * page_capacity, v.len());
-  let new_page_data = (&v[..to_take]).chunks(page_capacity);
-
-  // Create the pages that can be accomodated in the new root page
-  let mut page_indices = vec![page_index];
-  let last_page_index = last_page(page_index, pp);
-  let (pp, last_page) = pp.mut_page(last_page_index);
-  let (pp, _) = new_page_data.fold((pp, last_page), |(pp, prev_page): (&mut PageProvider, &mut Page), x: &[T]| {
-    let page_index = pp.alloc(1)[0];
-    prev_page.header.next = page_index;         // Link to previous page
-    let (pp, page) = pp.mut_page(page_index);
-    page.header = EMPTY_HEADER;
-    page.header.entries = x.len() as u16;
-    let page_ref = page.mut_pref::<T>();
-    page_ref.data.copy_from_slice(x);
-    page_indices.push(page_index);
-    (pp, page)
-  });
-
+) -> u32 {
   let new_index = pp.alloc(1)[0];
   let (_, new_page) = pp.mut_page(new_index);
   new_page.header = EMPTY_HEADER;
   new_page.header.depth = depth;
-  new_page.header.entries = page_indices.len() as u16;
+  new_page.header.entries = 1;
   let new_page_ref = new_page.mut_pref::<u32>();
-  new_page_ref.data.copy_from_slice(page_indices.as_slice());
-
-  let residual = &v[to_take..];
-  (new_index, residual)
+  new_page_ref.data[0] = page_index;
+  new_index
 }
 
 fn append_slice<'a, T: Debug + Copy>(
@@ -146,16 +120,14 @@ fn append_slice<'a, T: Debug + Copy>(
     // Root of tree is a leaf no where to insert the returned page, so increase the tree depth
     append_slice_leaf(page, v, pp)
   } else {
-    append_slice_i(page.header.depth, page, v, pp)
+    append_slice_i(page, v, pp)
   };
 
   // If everything is full rotate existing tree left and create a new right tree
   if !remaining_values.is_empty() {
     println!("Rotation to depth {}", page.header.depth + 1);
-    let (page_index, remaining_values) = rotate_slice(
+    let page_index = rotate_slice(
       page_index,
-      page,
-      remaining_values,
       pp,
       page.header.depth + 1,
     );
@@ -172,7 +144,6 @@ fn append_slice<'a, T: Debug + Copy>(
 
 
 fn append_slice_i<'a, T: Debug+Copy>(
-  parent_depth: u8,
   page: &mut Page,
   v: &'a [T],
   pp: &mut PageProvider,
@@ -186,14 +157,14 @@ fn append_slice_i<'a, T: Debug+Copy>(
     let page_data = page_ref.data;
     let next_page_index = page_data[page_ref.header.entries as usize - 1];
     let (pp, next_page) = pp.mut_page(next_page_index);
-    let residual = append_slice_i(page_ref.header.depth, next_page, v, pp);
+    let residual = append_slice_i(next_page, v, pp);
     if !residual.is_empty() {
       // if the tree is not full
       if next_page.header.depth + 1 != page_ref.header.depth {
-        let (new_index, residual) = rotate_slice(next_page_index, next_page, residual, pp, next_page.header.depth + 1);
+        let new_index = rotate_slice(next_page_index, pp, next_page.header.depth + 1);
         page_data[page_data.len() as usize - 1] = new_index;
         // attempt reinsert since subtrees may not be full
-        append_slice_i(parent_depth, page, residual, pp)
+        append_slice_i(page, residual, pp)
       } else {
         // Append a new page to this index layer if it's not full
         let entries = page.header.entries as usize;
@@ -220,11 +191,11 @@ fn append_slice_i<'a, T: Debug+Copy>(
           page_ref.data[entries] = new_page_index;
 
           let residual = &residual[to_take..];
-          if residual.is_empty() || page.header.depth == 1 {
+          if residual.is_empty() {
             residual
           } else {
             // retry at this level if the new page didn't result in a full tree
-            append_slice_i(parent_depth, page, residual, pp)
+            append_slice_i(page, residual, pp)
           }
         }
       }
@@ -281,15 +252,16 @@ fn get<'a, T: Debug>(
 }
 
 // Walking the index is common regardless of type
-trait PagedVectorFns<'a, T> {
+pub trait PagedVectorFns<'a, T> {
   fn push(&mut self, v: &T);
   fn append(&mut self, v: &[T]);
   fn get(&self, i: usize) -> &T;
   fn iter_from(&'a self, i: usize) -> PagedVectorIterator<T>;
   fn iter(&'a self) -> PagedVectorIterator<T>;
+  fn len(&self) -> usize;
 }
 
-struct PagedVector<'a, T> {
+pub struct PagedVector<'a, T> {
   db: &'a mut PageProvider,
   entry_page: u32,
   _dummy: std::marker::PhantomData<T>
@@ -320,7 +292,27 @@ impl<'a, T: Debug+Copy> PagedVectorFns<'a, T> for PagedVector<'a, T> {
   fn iter(&'a self) -> PagedVectorIterator<T> {
     self.iter_from(0)
   }
+
+  fn len(&self) -> usize {
+    len::<T>(self.entry_page, self.db)
+  }
 }
+
+
+fn len<T>(page_index: u32, pp: &PageProvider) -> usize {
+  let page = pp.page(page_index);
+  if page.header.is_leaf() {
+    page.header.entries as usize
+  } else {
+    let leaf_capacity = Page::capacity::<T>();
+    let index_capacity = Page::capacity::<u32>();
+    let page_contains = index_capacity.pow(page.header.depth as u32 - 1) * leaf_capacity;
+    let page_data = page.pref::<u32>().data;
+    let entries = page.header.entries;
+    (entries as usize - 1) * page_contains + len::<T>(page_data[entries as usize - 1], pp)
+  }
+}
+
 
 impl<'a, T:'a+Copy+Debug> IntoIterator for &'a PagedVector<'a, T> {
   type Item = T;
@@ -331,7 +323,7 @@ impl<'a, T:'a+Copy+Debug> IntoIterator for &'a PagedVector<'a, T> {
   }
 }
 
-struct PagedVectorIterator<'a, T> {
+pub struct PagedVectorIterator<'a, T> {
   vector: &'a PagedVector<'a, T>,
   page: &'a Page,
   offset: usize,
@@ -362,6 +354,8 @@ impl<'a, T : Copy> Iterator for PagedVectorIterator<'a, T> {
 }
 
 #[cfg(test)]
+use crate::database::{MemoryPageProvider};
+
 pub mod tests {
   #[allow(unused_imports)]
   use super::*;
@@ -402,6 +396,8 @@ pub mod tests {
       count += 1;
     });
     assert!(count == 4);
+
+    assert!(p.len() == 3);
   }
 
   #[test]
@@ -437,6 +433,8 @@ pub mod tests {
     for i in 0..1024 {
       assert!(*p.get(i) == i as u32);
     }
+
+    assert!(p.len() == 1024);
   }
 
   #[test]
@@ -488,11 +486,14 @@ pub mod tests {
       count += 1;
     });
     assert!(count == 4000000);
+
+    assert!(p.len() == 4000000);
+
   }
 
 
  #[test]
-  // #[ignore] // Takes way to long to run, but necessary
+// #[ignore] // Takes way to long to run, but necessary
   pub fn add_agg() {
     let mut pp = MemoryPageProvider::new();
     let root = pp.alloc(1)[0];
@@ -521,7 +522,13 @@ pub mod tests {
       count += 1;
     });
 
+    
+    for i in 0..(4000000 * slice_len) {
+      assert!(*p.get(i) == repslice[i % slice_len]);
+    }
+
     assert!(count == 4000000 * slice_len);
+    assert!(p.len() == 4000000 * slice_len);
   }
 
  #[test]
@@ -540,7 +547,9 @@ pub mod tests {
 
     let repslice : Vec<u32> = (1..2000000).collect();
 
-    for i in 0..100 {
+    let inserts = 100;
+
+    for i in 0..inserts {
       p.append(&repslice);
     }
 
@@ -554,7 +563,14 @@ pub mod tests {
       count += 1;
     });
 
-    assert!(count == 100 * slice_len);
+    assert!(count == inserts * slice_len);
+
+    for i in 0..(inserts * slice_len) {
+      assert!(*p.get(i) == repslice[i % slice_len]);
+    }
+
+    println!("Count = {:?}, LEN = {:?}", count, p.len());
+    assert!(p.len() == inserts * slice_len);
   }
 
   #[test]
@@ -593,6 +609,8 @@ pub mod tests {
     for i in 0..4000000000usize {
       assert!(*p.get(i) == i as u32);
     }
+
+    assert!(p.len() == 4000000000usize);
   }
 
 }
