@@ -116,12 +116,7 @@ fn append_slice<'a, T: Debug + Copy>(
 ) -> u32 {
   // Root case
   let (pp, page) = pp.mut_page(page_index);
-  let remaining_values = if page.header.is_leaf() {
-    // Root of tree is a leaf no where to insert the returned page, so increase the tree depth
-    append_slice_leaf(page, v, pp)
-  } else {
-    append_slice_i(page, v, pp)
-  };
+  let remaining_values = append_slice_i(page, v, pp);
 
   // If everything is full rotate existing tree left and create a new right tree
   if !remaining_values.is_empty() {

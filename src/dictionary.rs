@@ -5,6 +5,11 @@
 
 use crate::paged_vector::{PagedVector};
 
+trait Dictionary<T> {
+  fn append(&self, vs: &[T]) -> u32;
+}
+
+
 // Could be more compact!
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
@@ -20,8 +25,8 @@ struct ArrayDictionary<'a, T> {
 }
 
 
-impl<'a, T> ArrayDictionary<'a, T> {
-  fn append(&self, vs: &[T]) -> u32 {
+impl<'a, T> Dictionary<&[T]> for ArrayDictionary<'a, T> {
+  fn append(&self, vs: &[&[T]]) -> u32 {
     0
   }
 
