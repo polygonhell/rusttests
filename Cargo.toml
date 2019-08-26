@@ -7,6 +7,14 @@ edition = "2018"
 [profile.dev]
 opt-level = 0
 
+[profile.bench]
+opt-level = 3
+codegen-units=1
+lto=true
+debug-assertions=false
+debug=false
+rpath = false
+
 [profile.release]
 opt-level = 3
 codegen-units=1
