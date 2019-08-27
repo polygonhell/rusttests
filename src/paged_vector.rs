@@ -84,7 +84,7 @@ impl Page {
 }
 
 #[inline(always)]
-fn last_page(page_index: u32, pp: &PageProvider) -> u32 {
+fn last_page(page_index: u32, pp: &dyn PageProvider) -> u32 {
   let page = pp.page(page_index);
   if page.header.depth == 0 {
     page_index
@@ -96,7 +96,7 @@ fn last_page(page_index: u32, pp: &PageProvider) -> u32 {
 
 fn rotate_slice(
   page_index: u32,
-  pp: &mut PageProvider,
+  pp: &mut dyn PageProvider,
   depth: u8,
 ) -> u32 {
   let new_index = pp.alloc(1)[0];
@@ -112,7 +112,7 @@ fn rotate_slice(
 fn append_slice<'a, T: Debug + Copy>(
   page_index: u32,
   v: &'a [T],
-  pp: &mut PageProvider,
+  pp: &mut dyn PageProvider,
 ) -> u32 {
   // Root case
   let (pp, page) = pp.mut_page(page_index);
@@ -141,7 +141,7 @@ fn append_slice<'a, T: Debug + Copy>(
 fn append_slice_i<'a, T: Debug+Copy>(
   page: &mut Page,
   v: &'a [T],
-  pp: &mut PageProvider,
+  pp: &mut dyn PageProvider,
 ) -> &'a [T] {
   if page.header.is_leaf() {
     // index will deal with the rotation if it's full
@@ -201,7 +201,7 @@ fn append_slice_i<'a, T: Debug+Copy>(
 }
 
 
-fn append_slice_leaf<'a, T: Debug+Copy>(page: &mut Page, v: &'a [T], pp: &mut PageProvider) -> &'a [T] {
+fn append_slice_leaf<'a, T: Debug+Copy>(page: &mut Page, v: &'a [T], pp: &mut dyn PageProvider) -> &'a [T] {
   let page_capacity = Page::capacity::<T>();
   let entries = page.header.entries as usize;
   let free_entries = page_capacity - entries;
@@ -220,7 +220,7 @@ fn append_slice_leaf<'a, T: Debug+Copy>(page: &mut Page, v: &'a [T], pp: &mut Pa
 
 
 // Shared by get and iterator code
-fn page_ref<T>(page_index: u32, index: usize, pp: &PageProvider) -> (u32, &Page, usize) {
+fn page_ref<T>(page_index: u32, index: usize, pp: &dyn PageProvider) -> (u32, &Page, usize) {
   // Get the current page
   let page = pp.page(page_index);
   if page.header.is_leaf() {
@@ -239,7 +239,7 @@ fn page_ref<T>(page_index: u32, index: usize, pp: &PageProvider) -> (u32, &Page,
 fn get<'a, T: Debug>(
   page_index: u32,
   index: usize,
-  pp: &'a PageProvider,
+  pp: &'a dyn PageProvider,
 ) -> &'a T {
   let (page_index, page, index) = page_ref::<T>(page_index, index, pp);
   let data = page.pref::<T>().data;
@@ -257,7 +257,7 @@ pub trait PagedVectorFns<'a, T> {
 }
 
 pub struct PagedVector<'a, T> {
-  db: &'a mut PageProvider,
+  db: &'a mut dyn PageProvider,
   entry_page: u32,
   _dummy: std::marker::PhantomData<T>
 }
@@ -294,7 +294,7 @@ impl<'a, T: Debug+Copy> PagedVectorFns<'a, T> for PagedVector<'a, T> {
 }
 
 
-fn len<T>(page_index: u32, pp: &PageProvider) -> usize {
+fn len<T>(page_index: u32, pp: &dyn PageProvider) -> usize {
   let page = pp.page(page_index);
   if page.header.is_leaf() {
     page.header.entries as usize

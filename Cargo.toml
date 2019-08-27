@@ -6,6 +6,7 @@ edition = "2018"
 
 [profile.dev]
 opt-level = 0
+debug=true
 
 [profile.bench]
 opt-level = 3

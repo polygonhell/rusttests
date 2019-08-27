@@ -92,7 +92,7 @@ use crate::paged_vector::{Page};
 
 pub trait PageProvider {
   fn alloc(&mut self, count: usize) -> Vec<u32>;
-  fn mut_page(&mut self, i: u32) -> (&mut PageProvider, &mut Page);
+  fn mut_page(&mut self, i: u32) -> (&mut dyn PageProvider, &mut Page);
   fn page(&self, i: u32) -> &Page;
   fn index_of(&self, page: &Page) -> u32;
 }
@@ -119,7 +119,7 @@ impl PageProvider for MemoryPageProvider {
     unsafe { & *(page as *const u8 as *const Page) }
   }
 
-  fn mut_page(&mut self, i: u32) -> (&mut PageProvider, &mut Page) {
+  fn mut_page(&mut self, i: u32) -> (&mut dyn PageProvider, &mut Page) {
     let page = self.pages[i as usize].as_mut_ptr();
     (self, unsafe { &mut *(page as *const u8 as *mut Page) })
   }
@@ -194,7 +194,7 @@ impl FreeList {
     self.version = FREE_LIST_VERSION;
     self.depth = 0;
     self.padding = 0;
-    unsafe { self.data.leaf.d = [0; (PAGE_SIZE - 4)] };
+    self.data.leaf.d = [0; (PAGE_SIZE - 4)];
   }
 
   fn set(&mut self, index: u32) -> &mut FreeList {
